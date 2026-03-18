@@ -5,10 +5,11 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Search, ChevronDown, Calendar, TrendingUp, TrendingDown,
+  ChevronDown, Calendar, TrendingUp, TrendingDown,
   LayoutGrid, LineChart as LineChartIcon, AlertTriangle,
-  Megaphone, Rocket, Aperture, Check, X, Package, Users
+  Megaphone, Rocket, Check, X, Package, Users
 } from 'lucide-react';
+import tirtirLogoImg     from '../TIRTIR로고.png';
 import cushionRedImg     from '../Cushion_image/마스크핏레드쿠션.png';
 import cushionAiImg      from '../Cushion_image/마스크핏AI필터쿠션.png';
 import cushionRubyImg    from '../Cushion_image/마스크핏루비메쉬쿠션.png';
@@ -116,15 +117,31 @@ const COUNTRY_CHANNEL_CONFIG: Record<string, {
   },
 };
 
+// ── 쉐이드별 채널 편향 (합계=3 → 전체 총량 유지, 분포만 변화) ──────────────────
+// 각 호수가 어느 채널에서 더 강하게 팔리는지를 반영.
+// 올리브영 강세: 17C, 19C / 자사몰 강세: 21N, 15.5N, 19.5N
+const SHADE_CHANNEL_BIAS: Record<string, { amazon: number; tiktok: number; offline: number }> = {
+  '17C':   { amazon: 0.5, tiktok: 0.9, offline: 1.6 },
+  '19C':   { amazon: 0.6, tiktok: 0.9, offline: 1.5 },
+  '21N':   { amazon: 1.7, tiktok: 0.7, offline: 0.6 },
+  '15.5N': { amazon: 1.5, tiktok: 0.8, offline: 0.7 },
+  '19.5N': { amazon: 1.3, tiktok: 0.9, offline: 0.8 },
+  '15C':   { amazon: 0.7, tiktok: 1.0, offline: 1.3 },
+  '13N':   { amazon: 1.1, tiktok: 1.2, offline: 0.7 },
+  '17N':   { amazon: 0.8, tiktok: 1.1, offline: 1.1 },
+  '19N':   { amazon: 0.9, tiktok: 1.2, offline: 0.9 },
+  '23N':   { amazon: 1.0, tiktok: 1.3, offline: 0.7 },
+  '24N':   { amazon: 0.9, tiktok: 1.2, offline: 0.9 },
+  '29N':   { amazon: 1.2, tiktok: 0.9, offline: 0.9 },
+};
+
 // ── App ─────────────────────────────────────────────────────────────────────────
 export default function App() {
   // ── Filter state ────────────────────────────────────────────────────────────
   const [selectedProductId,  setSelectedProductId]  = useState<string>('red');
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [selectedCountry,    setSelectedCountry]    = useState<string>('KOR');
-  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [selectedChannel,    setSelectedChannel]    = useState<string>('전체');
-  const [channelDropdownOpen, setChannelDropdownOpen] = useState(false);
 
   // ── Heatmap / chart state ────────────────────────────────────────────────────
   const [selectedShade, setSelectedShade] = useState<string>('21N');
@@ -147,16 +164,10 @@ export default function App() {
   }
 
   // ── Dropdown refs ────────────────────────────────────────────────────────────
-  const countryDropdownRef = useRef<HTMLDivElement>(null);
-  const channelDropdownRef = useRef<HTMLDivElement>(null);
   const productDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target as Node))
-        setCountryDropdownOpen(false);
-      if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node))
-        setChannelDropdownOpen(false);
       if (productDropdownRef.current && !productDropdownRef.current.contains(e.target as Node))
         setProductDropdownOpen(false);
     }
@@ -232,11 +243,12 @@ export default function App() {
     const sel = computedIntensities[selectedShade] ?? 20;
     const max = Math.max(...(Object.values(computedIntensities) as number[]), 1);
     const scale = sel / max;
+    const bias = SHADE_CHANNEL_BIAS[selectedShade] ?? { amazon: 1, tiktok: 1, offline: 1 };
     return dashboardData.velocity.map(pt => ({
       ...pt,
-      amazon:  Math.round(pt.amazon  * scale),
-      tiktok:  Math.round(pt.tiktok  * scale),
-      offline: Math.round(pt.offline * scale),
+      amazon:  Math.max(0, Math.round(pt.amazon  * scale * bias.amazon)),
+      tiktok:  Math.max(0, Math.round(pt.tiktok  * scale * bias.tiktok)),
+      offline: Math.max(0, Math.round(pt.offline * scale * bias.offline)),
     }));
   }, [dashboardData, selectedShade, computedIntensities]);
 
@@ -316,16 +328,10 @@ export default function App() {
       {/* ── Header ── */}
       <header className="bg-white border-b border-[#e0001a]/10 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2 text-[#e0001a]">
-            <Aperture size={28} strokeWidth={2.5} />
-            <h2 className="text-slate-900 text-lg font-bold tracking-tight uppercase">TIRTIR Shade-Sync</h2>
+          <div className="flex items-center gap-3">
+            <img src={tirtirLogoImg} alt="TIRTIR" className="h-8 object-contain" />
+            <h2 className="text-slate-900 text-lg font-bold tracking-tight">국가별 쿠션 수요 모니터링</h2>
           </div>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#" className="text-[#e0001a] text-sm font-semibold border-b-2 border-[#e0001a] pb-1">대시보드</a>
-            <a href="#" className="text-slate-500 text-sm font-medium hover:text-[#e0001a] transition-colors pb-1">재고</a>
-            <a href="#" className="text-slate-500 text-sm font-medium hover:text-[#e0001a] transition-colors pb-1">판매</a>
-            <a href="#" className="text-slate-500 text-sm font-medium hover:text-[#e0001a] transition-colors pb-1">마케팅</a>
-          </nav>
         </div>
         <div className="flex items-center gap-4">
           {/* DB 연결 상태 배지 */}
@@ -337,73 +343,57 @@ export default function App() {
             <span className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
             {isLive ? 'LIVE DB' : 'MOCK DATA'}
           </span>
-          <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="제품 또는 호수 검색"
-              className="bg-slate-100 border-none rounded-lg pl-9 pr-4 py-2 text-sm w-64 focus:ring-2 focus:ring-[#e0001a]/20 outline-none" />
-          </div>
-          <img src="https://i.pravatar.cc/150?img=32" alt="User"
-            className="w-9 h-9 rounded-full border-2 border-[#e0001a]/20" />
         </div>
       </header>
 
       <main className="max-w-[1440px] mx-auto p-6 space-y-6">
         {/* ── Filters ── */}
-        <div className="flex flex-wrap gap-3 items-center bg-white p-3 rounded-xl border border-[#e0001a]/5 shadow-sm">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest px-2">Filters</span>
+        <div className="flex flex-wrap gap-4 items-center bg-white px-4 py-3 rounded-xl border border-[#e0001a]/5 shadow-sm">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Filters</span>
 
-          {/* Country */}
-          <div className="relative" ref={countryDropdownRef}>
-            <button
-              onClick={() => { setCountryDropdownOpen((p: boolean) => !p); setChannelDropdownOpen(false); }}
-              className="flex items-center gap-2 rounded-lg bg-[#e0001a]/5 border border-[#e0001a]/10 px-4 py-1.5 text-sm font-semibold hover:bg-[#e0001a]/10 transition-colors"
-            >
-              <img src={COUNTRY_FLAG[selectedCountry]} alt={selectedCountry} className="w-5 h-3.5 object-cover rounded-sm" />
-              <span>국가: {selectedCountry}</span>
-              <ChevronDown size={16} className={`transition-transform ${countryDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {countryDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 bg-white rounded-xl border border-[#e0001a]/10 shadow-lg z-20 py-1 min-w-[140px]">
-                {ALL_COUNTRIES.map(country => (
-                  <button key={country} onClick={() => { setSelectedCountry(country); setCountryDropdownOpen(false); }}
-                    className="flex items-center gap-3 w-full px-4 py-2 text-sm font-semibold hover:bg-[#e0001a]/5 transition-colors">
-                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                      selectedCountry === country ? 'bg-[#e0001a] border-[#e0001a]' : 'border-slate-300'
-                    }`}>
-                      {selectedCountry === country && <Check size={8} className="text-white" />}
-                    </span>
-                    <img src={COUNTRY_FLAG[country]} alt={country} className="w-5 h-3.5 object-cover rounded-sm" />
-                    {country}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* Country 라디오 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400">국가</span>
+            <div className="flex gap-1">
+              {ALL_COUNTRIES.map(country => (
+                <button
+                  key={country}
+                  onClick={() => setSelectedCountry(country)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    selectedCountry === country
+                      ? 'bg-[#e0001a] text-white'
+                      : 'bg-[#e0001a]/5 text-slate-600 hover:bg-[#e0001a]/10'
+                  }`}
+                >
+                  <img src={COUNTRY_FLAG[country]} alt={country} className="w-4 h-3 object-cover rounded-sm" />
+                  {country}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Channel */}
-          <div className="relative" ref={channelDropdownRef}>
-            <button
-              onClick={() => { setChannelDropdownOpen((p: boolean) => !p); setCountryDropdownOpen(false); }}
-              className="flex items-center gap-2 rounded-lg bg-[#e0001a]/5 border border-[#e0001a]/10 px-4 py-1.5 text-sm font-semibold hover:bg-[#e0001a]/10 transition-colors"
-            >
-              <span>채널: {selectedChannel}</span>
-              <ChevronDown size={16} className={`transition-transform ${channelDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {channelDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 bg-white rounded-xl border border-[#e0001a]/10 shadow-lg z-20 py-1 min-w-[160px]">
-                {availableChannels.map(ch => (
-                  <button key={ch} onClick={() => { setSelectedChannel(ch); setChannelDropdownOpen(false); }}
-                    className="flex items-center gap-3 w-full px-4 py-2 text-sm font-semibold hover:bg-[#e0001a]/5 transition-colors">
-                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                      selectedChannel === ch ? 'bg-[#e0001a] border-[#e0001a]' : 'border-slate-300'
-                    }`}>
-                      {selectedChannel === ch && <Check size={8} className="text-white" />}
-                    </span>
-                    {ch}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* Channel 라디오 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400">채널</span>
+            <div className="flex gap-1">
+              {availableChannels.map(ch => (
+                <button
+                  key={ch}
+                  onClick={() => setSelectedChannel(ch)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    selectedChannel === ch
+                      ? 'bg-[#e0001a] text-white'
+                      : 'bg-[#e0001a]/5 text-slate-600 hover:bg-[#e0001a]/10'
+                  }`}
+                >
+                  {ch}
+                </button>
+              ))}
+            </div>
           </div>
 
           <button className="flex items-center gap-2 rounded-lg bg-[#e0001a]/5 border border-[#e0001a]/10 px-4 py-1.5 text-sm font-semibold hover:bg-[#e0001a]/10 transition-colors ml-auto">
