@@ -22,7 +22,7 @@ import {
 } from './mockData';
 import { useDashboardData } from './hooks/useDashboardData';
 
-// ── Static shade list (colors never change) ────────────────────────────────────
+// ── 마스크핏 레드 쿠션 45 shades (5×9 grid) ──────────────────────────────────
 const shades = [
   { name: '10C',   color: '#F6ECE2' }, { name: '13C',   color: '#F5EAE5' },
   { name: '13N',   color: '#F3E6D7' }, { name: '13W',   color: '#F3E7D7' },
@@ -48,7 +48,40 @@ const shades = [
   { name: '47N',   color: '#523726' }, { name: '51N',   color: '#452B1B' },
   { name: '55N',   color: '#342014' },
 ];
-const shadeColorMap = Object.fromEntries(shades.map(s => [s.name, s.color]));
+
+// ── 마스크핏 AI 필터 쿠션 35 shades (5×7 grid) ───────────────────────────────
+// Red 쿠션에 없는 AI 전용 호수 색상
+const AI_EXTRA: Record<string, string> = {
+  '11C': '#F5EBE4',  // 10C와 13N 사이, 쿨톤 아이보리
+  '25C': '#D8BAA6',  // 25N보다 쿨핑크 톤
+  '37N': '#977154',  // 35N~40N 사이 뉴트럴 브라운
+  '39W': '#927454',  // 37N보다 웜톤
+  '49N': '#4E3122',  // 47N~51N 사이 딥 브라운
+};
+const shadeColorMap: Record<string, string> = {
+  ...Object.fromEntries(shades.map(s => [s.name, s.color])),
+  ...AI_EXTRA,
+};
+const AI_SHADES = [
+  '10C','11C','13N','13.5N','15C','15.5N','17C','17N',
+  '19C','19N','19.5N','21C','21N','21W','22N','23N',
+  '24N','24W','25C','25N','27C','27N','28N','29N',
+  '30N','33C','33N','34W','37N','39W','43N','45W',
+  '49N','51N','55N',
+].map(name => ({ name, color: shadeColorMap[name] ?? '#8A6652' }));
+
+// ── 마스크핏 크리스탈 메쉬 쿠션 15 shades (5×3 grid) ─────────────────────────
+const CRYSTAL_SHADES = [
+  '13N','13.5N','15C','15.5N','17C',
+  '17N','19C','19N','19.5N','21C',
+  '21N','22N','23N','24N','29N',
+].map(name => ({ name, color: shadeColorMap[name] ?? '#E7CFB2' }));
+
+// ── 마스크핏 루비 메쉬 쿠션 10 shades (5×2 grid) ──────────────────────────────
+const RUBY_SHADES = [
+  '11C','13N','15C','17C','19N',
+  '21C','21N','23N','24N','29N',
+].map(name => ({ name, color: shadeColorMap[name] ?? '#E7CFB2' }));
 
 // ── Product list ───────────────────────────────────────────────────────────────
 const PRODUCTS = [
@@ -138,6 +171,30 @@ export default function App() {
   const availableChannels = channelConfig.channels;
 
   const currentProduct = PRODUCTS.find(p => p.id === selectedProductId) ?? PRODUCTS[0];
+
+  // ── 제품별 쉐이드 히트맵 설정 ────────────────────────────────────────────────
+  // Red/Ruby: 45개 5×9 | AI: 35개 5×7 | Crystal: 15개 5×3
+  // 전체 배너 높이 고정(aspect-[9/5]) → 제품 바꿔도 그리드 높이 동일
+  const isAiProduct      = selectedProductId === 'ai';
+  const isCrystalProduct = selectedProductId === 'crystal';
+  const isRubyProduct    = selectedProductId === 'ruby';
+  const currentShades =
+    isAiProduct      ? AI_SHADES :
+    isCrystalProduct ? CRYSTAL_SHADES :
+    isRubyProduct    ? RUBY_SHADES :
+    shades;  // Red: 45개 기본
+
+  // 셀 크기에 비례한 글씨/도트 크기 (Ruby=최대, Red=최소)
+  const cellTextSize =
+    isRubyProduct    ? 'text-[13px]' :
+    isCrystalProduct ? 'text-[11px]' :
+    isAiProduct      ? 'text-[9.5px]' :
+                       'text-[8.8px]';
+  const cellDotSize =
+    isRubyProduct    ? 'w-[13px] h-[13px]' :
+    isCrystalProduct ? 'w-[11px] h-[11px]' :
+    isAiProduct      ? 'w-[9.5px] h-[9.5px]' :
+                       'w-[8.8px] h-[8.8px]';
 
   // ── 1. Aggregate raw country data (Supabase DB → mock fallback) ─────────────
   // channelDbKey: 전체='전체'이면 null(집계), 특정 채널이면 DB 키('amazon'|'offline')
@@ -468,8 +525,16 @@ export default function App() {
                   <span className="ml-1 text-[#e0001a]">({selectedCountry})</span>
                 </p>
 
-                <div className="grid grid-cols-9 gap-1.5">
-                  {shades.map(shade => {
+                {/* 히트맵: Red/Ruby=5×9(45개), AI=5×7(35개), Crystal=5×3(15개)
+                    aspect-[9/5] 로 컨테이너 높이를 레드쿠션 기준으로 고정
+                    grid-rows/cols는 제품별로 다르게 → 셀 크기만 달라지고 전체 높이 동일 */}
+                <div className={`grid gap-1.5 aspect-[9/5] ${
+                  isCrystalProduct ? 'grid-cols-5 grid-rows-3' :
+                  isRubyProduct    ? 'grid-cols-5 grid-rows-2' :
+                  isAiProduct      ? 'grid-cols-7 grid-rows-5' :
+                                     'grid-cols-9 grid-rows-5'
+                }`}>
+                  {currentShades.map(shade => {
                     const intensity  = computedIntensities[shade.name] ?? 5;
                     const isSelected = selectedShade === shade.name;
                     const isTop3     = top3Shades.some(t => t.shade === shade.name);
@@ -478,7 +543,7 @@ export default function App() {
                         key={shade.name}
                         onClick={() => { setSelectedShade(shade.name); setShadePopup(shade); }}
                         title={`${shade.name} - 클릭하여 상세 보기`}
-                        className={`aspect-square rounded flex flex-col items-center justify-center font-bold cursor-pointer hover:scale-110 transition-transform ${
+                        className={`rounded flex flex-col items-center justify-center font-bold cursor-pointer hover:scale-110 transition-transform ${
                           intensity >= 40 ? 'text-white' : 'text-[#e0001a]/80'
                         } ${
                           intensity===5  ? 'bg-[#e0001a]/5'  :
@@ -491,10 +556,10 @@ export default function App() {
                         }`}
                       >
                         <div
-                          className={`w-[8.8px] h-[8.8px] rounded-full mb-0.5 ${intensity >= 40 ? 'border border-white/20' : 'border border-black/5'}`}
+                          className={`${cellDotSize} rounded-full mb-0.5 ${intensity >= 40 ? 'border border-white/20' : 'border border-black/5'}`}
                           style={{ backgroundColor: shade.color }}
                         ></div>
-                        <span className="text-[8.8px] font-bold leading-none">{shade.name}</span>
+                        <span className={`${cellTextSize} font-bold leading-none`}>{shade.name}</span>
                       </button>
                     );
                   })}
