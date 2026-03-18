@@ -253,6 +253,26 @@ export default function App() {
     return 1;
   }, [dashboardData, selectedChannel, channelConfig]);
 
+  // ── 5b. 재고 채널 분할 배율 ──────────────────────────────────────────────────
+  // 자사몰×3, 올리브영×2, tiktok×1 가중치 적용.
+  // 전체 = 자사몰 + 올리브영 + tiktok 이 되도록 전체에도 동일한 가중합 적용.
+  const inventoryMult = useMemo(() => {
+    if (!dashboardData) return 1;
+    const last  = dashboardData.velocity[dashboardData.velocity.length - 1];
+    const total = last.amazon + last.tiktok + last.offline;
+    if (total === 0) return 1;
+    const fA = last.amazon  / total;
+    const fT = last.tiktok  / total;
+    const fO = last.offline / total;
+    // 전체: 가중합 (채널별 합산과 일치)
+    if (selectedChannel === '전체') return fA * 3 + fT * 1 + fO * 2;
+    const key = channelConfig.labelMap[selectedChannel];
+    if (key === 'amazon')  return fA * 3;
+    if (key === 'tiktok')  return fT * 1;
+    if (key === 'offline') return fO * 2;
+    return 1;
+  }, [dashboardData, selectedChannel, channelConfig]);
+
   // ── 6. Projected burn rate for the velocity chart footer ─────────────────────
   const projectedBurnRate = useMemo(() => {
     if (!dashboardData) return 0;
@@ -669,17 +689,10 @@ export default function App() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {dashboardData.inventory.map(item => {
-                          // 채널별 재고·소진속도 배율: 자사몰×3, 올리브영×2 (재고 규모 반영)
-                          const chKey = channelConfig.labelMap[selectedChannel];
-                          const channelVolMult =
-                            chKey === 'amazon'  ? 3 :
-                            chKey === 'offline' ? 2 : 1;
-                          const effStock    = selectedChannel === '전체'
-                            ? item.stock
-                            : Math.max(1, Math.round(item.stock * channelBurnMult * channelVolMult));
-                          const effBurnRate = selectedChannel === '전체'
-                            ? item.burnRate
-                            : Math.max(1, Math.round(item.burnRate * channelBurnMult * channelVolMult));
+                          // inventoryMult: 전체=가중합(자사몰×3+올리브영×2+tiktok×1), 채널=해당 가중치
+                          // → 자사몰+올리브영+tiktok 합계 = 전체 일치
+                          const effStock    = Math.max(1, Math.round(item.stock    * inventoryMult));
+                          const effBurnRate = Math.max(1, Math.round(item.burnRate * inventoryMult));
                           const dDay = Math.round(effStock / effBurnRate);
                           const badge = dDayBadge(dDay);
                           return (
