@@ -669,13 +669,23 @@ export default function App() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {dashboardData.inventory.map(item => {
-                          const effBurnRate = Math.max(1, Math.round(item.burnRate * channelBurnMult));
-                          const dDay = Math.round(item.stock / effBurnRate);
+                          // 채널별 재고·소진속도 배율: 자사몰×3, 올리브영×2 (재고 규모 반영)
+                          const chKey = channelConfig.labelMap[selectedChannel];
+                          const channelVolMult =
+                            chKey === 'amazon'  ? 3 :
+                            chKey === 'offline' ? 2 : 1;
+                          const effStock    = selectedChannel === '전체'
+                            ? item.stock
+                            : Math.max(1, Math.round(item.stock * channelBurnMult * channelVolMult));
+                          const effBurnRate = selectedChannel === '전체'
+                            ? item.burnRate
+                            : Math.max(1, Math.round(item.burnRate * channelBurnMult * channelVolMult));
+                          const dDay = Math.round(effStock / effBurnRate);
                           const badge = dDayBadge(dDay);
                           return (
                             <tr key={item.code} className="hover:bg-slate-50 transition-colors">
                               <td className="py-3 px-1 font-bold">{item.shade}</td>
-                              <td className="py-3 px-1">{item.stock.toLocaleString()}</td>
+                              <td className="py-3 px-1">{effStock.toLocaleString()}</td>
                               <td className="py-3 px-1">{effBurnRate.toLocaleString()}/일</td>
                               <td className="py-3 px-1 text-right">
                                 <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs ${badge.className}`}>
