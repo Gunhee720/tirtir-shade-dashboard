@@ -275,20 +275,7 @@ export default function App() {
     });
   }, [selectedProductId, selectedShade]);
 
-  // ── 5. Channel-specific burn rate multiplier ─────────────────────────────────
-  const channelBurnMult = useMemo(() => {
-    if (!dashboardData || selectedChannel === '전체') return 1;
-    const last  = dashboardData.velocity[dashboardData.velocity.length - 1];
-    const total = last.amazon + last.tiktok + last.offline;
-    if (total === 0) return 1;
-    const key = channelConfig.labelMap[selectedChannel];
-    if (key === 'amazon')  return last.amazon  / total;
-    if (key === 'tiktok')  return last.tiktok  / total;
-    if (key === 'offline') return last.offline / total;
-    return 1;
-  }, [dashboardData, selectedChannel, channelConfig]);
-
-  // ── 5b. 재고 채널 분할 배율 ──────────────────────────────────────────────────
+  // ── 5. 재고 채널 분할 배율 ───────────────────────────────────────────────────
   // 자사몰×3, 올리브영×2, tiktok×1 가중치 적용.
   // 전체 = 자사몰 + 올리브영 + tiktok 이 되도록 전체에도 동일한 가중합 적용.
   const inventoryMult = useMemo(() => {
@@ -765,49 +752,78 @@ export default function App() {
               <div className="lg:col-span-5 space-y-4">
                 {/* OOS Alert */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-[#e0001a]/5">
-                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                    <AlertTriangle className="text-[#e0001a]" size={20} />
-                    재고 알림: 품절 예상 D-Day
-                  </h3>
-                  <div className="overflow-hidden">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                          <th className="pb-3 px-1">호수</th>
-                          <th className="pb-3 px-1">재고</th>
-                          <th className="pb-3 px-1">소진 속도</th>
-                          <th className="pb-3 px-1 text-right">D-Day</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {dashboardData.inventory.map(item => {
-                          // inventoryMult: 전체=가중합(자사몰×3+올리브영×2+tiktok×1), 채널=해당 가중치
-                          // → 자사몰+올리브영+tiktok 합계 = 전체 일치
-                          const effStock    = Math.max(1, Math.round(item.stock    * inventoryMult));
-                          const effBurnRate = Math.max(1, Math.round(item.burnRate * inventoryMult));
-                          const dDay = Math.round(effStock / effBurnRate);
-                          const badge = dDayBadge(dDay);
-                          return (
-                            <tr key={item.code} className="hover:bg-slate-50 transition-colors">
-                              <td className="py-3 px-1 font-bold">{item.shade}</td>
-                              <td className="py-3 px-1">{effStock.toLocaleString()}</td>
-                              <td className="py-3 px-1">{effBurnRate.toLocaleString()}/일</td>
-                              <td className="py-3 px-1 text-right">
-                                <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs ${badge.className}`}>
-                                  {badge.label}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                      <AlertTriangle className="text-[#e0001a]" size={20} />
+                      재고 알림: 품절 예상 D-Day
+                    </h3>
+                    {selectedChannel !== '전체' && (
+                      <span className="text-[10px] text-[#e0001a] font-semibold">{selectedChannel} 기준</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-4">
+                    상시 판매와 프로모션 판매를 분리해 실제 품절 리스크와 추가 확보 필요량을 구분합니다
+                  </p>
+                  <div className="space-y-3">
+                    {dashboardData.inventory.map(item => {
+                      const effStock    = Math.max(1, Math.round(item.stock    * inventoryMult));
+                      const effBurnRate = Math.max(1, Math.round(item.burnRate * inventoryMult));
+
+                      // 상시 / 프로모 분리
+                      const regularStock    = Math.round(effStock * 0.70);
+                      const promoStock      = effStock - regularStock;
+                      const regularBurnRate = Math.max(1, Math.round(effBurnRate * 0.60));
+                      const promoBurnRate   = Math.max(1, Math.round(effBurnRate * 2.2));
+                      const regularDDay     = Math.round(regularStock / regularBurnRate);
+                      const promoDDay       = Math.round(promoStock   / promoBurnRate);
+                      const rBadge = dDayBadge(regularDDay);
+                      const pBadge = dDayBadge(promoDDay);
+
+                      return (
+                        <div key={item.code} className="rounded-xl border border-slate-100 overflow-hidden">
+                          {/* 호수 헤더 */}
+                          <div className="bg-slate-50 px-4 py-2 flex items-center justify-between">
+                            <span className="font-black text-sm text-slate-800">{item.shade}</span>
+                            <div className="flex gap-1.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${rBadge.className}`}>
+                                상시 {rBadge.label}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pBadge.className}`}>
+                                프로모 {pBadge.label}
+                              </span>
+                            </div>
+                          </div>
+                          {/* 상시 / 프로모 분리 바디 */}
+                          <div className="grid grid-cols-2 divide-x divide-slate-100">
+                            <div className="p-3 space-y-1">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">상시 판매</p>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">가용재고</span>
+                                <span className="font-bold text-slate-800">{regularStock.toLocaleString()}개</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">소진속도</span>
+                                <span className="font-bold text-slate-800">{regularBurnRate.toLocaleString()}/일</span>
+                              </div>
+                            </div>
+                            <div className="p-3 space-y-1">
+                              <p className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-2">프로모션</p>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">할당재고</span>
+                                <span className="font-bold text-orange-600">{promoStock.toLocaleString()}개</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">소진속도</span>
+                                <span className="font-bold text-orange-600">{promoBurnRate.toLocaleString()}/일</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <p className="text-[10px] text-slate-400 mt-3">
                     🚨 D-14 이내: 긴급 항공 발주 필요 · ⚠️ D-30 이내: 해상 발주 준비
-                    {selectedChannel !== '전체' && (
-                      <span className="ml-1 text-[#e0001a] font-semibold">({selectedChannel} 채널 기준)</span>
-                    )}
                   </p>
                 </div>
 
@@ -838,57 +854,62 @@ export default function App() {
               <div className="lg:col-span-7 flex flex-col gap-6">
                 {/* Customer Profiling */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-[#e0001a]/5">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex justify-between items-center mb-5">
                     <h3 className="font-bold text-lg flex items-center gap-2">
                       <Users size={20} className="text-[#e0001a]" />
-                      구매자 세그먼트 분석
+                      핵심 구매층 &amp; CRM 타깃 세그먼트
                     </h3>
-                    <div className="flex gap-2">
-                      <span className="bg-slate-100 text-[10px] font-bold px-2 py-1 rounded">
-                        {selectedCountry} 데이터
-                      </span>
-                    </div>
+                    <span className="bg-slate-100 text-[10px] font-bold px-2 py-1 rounded">
+                      {selectedCountry} 데이터
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="flex gap-4 items-center border-r border-slate-100 pr-6">
-                      <div className="relative size-20 shrink-0">
-                        <svg className="size-full transform -rotate-90" viewBox="0 0 36 36">
-                          <circle cx="18" cy="18" r="16" fill="none" className="stroke-slate-100" strokeWidth="4" />
-                          <circle cx="18" cy="18" r="16" fill="none" className="stroke-[#e0001a]" strokeWidth="4"
-                            strokeDasharray={`${dashboardData.femalePct}, 100`} />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-sm font-black">{dashboardData.femalePct}%</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-slate-400 uppercase">연령 / 성별</p>
-                        <p className="text-sm font-bold">{dashboardData.ageGroup}</p>
-                        <div className="flex gap-1">
-                          <div className="h-1.5 rounded-full bg-[#e0001a]"
-                            style={{ width: `${dashboardData.femalePct * 0.64}px` }}></div>
-                          <div className="h-1.5 w-4 bg-slate-200 rounded-full"></div>
-                        </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* 좌: 핵심 연령 분포 */}
+                    <div className="border border-slate-100 rounded-xl p-4">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">핵심 연령 분포</p>
+                      <div className="space-y-2.5">
+                        {[
+                          { label: '20~24세 여성', pct: 52, color: 'bg-[#e0001a]',   desc: '신규 유입 중심' },
+                          { label: '25~29세 여성', pct: 31, color: 'bg-[#e0001a]/60', desc: '재구매·객단가 기여' },
+                          { label: '기타',         pct: 17, color: 'bg-slate-200',    desc: '' },
+                        ].map(({ label, pct, color, desc }) => (
+                          <div key={label}>
+                            <div className="flex justify-between items-center text-xs mb-1">
+                              <span className="font-semibold text-slate-700">{label}</span>
+                              <div className="flex items-center gap-2">
+                                {desc && <span className="text-[10px] text-slate-400">{desc}</span>}
+                                <span className="font-black text-slate-900">{pct}%</span>
+                              </div>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex flex-col justify-center space-y-3">
-                      <p className="text-xs font-bold text-slate-400 uppercase">RFM 세그먼트</p>
-                      <div className="space-y-2">
+
+                    {/* 우: CRM 타깃 세그먼트 */}
+                    <div className="border border-slate-100 rounded-xl p-4">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">CRM 타깃 세그먼트</p>
+                      <div className="space-y-2.5">
                         {[
-                          { label: 'VIP (고가치 고객)',   count: dashboardData.vipCount,      color: 'bg-[#e0001a]' },
-                          { label: '이탈 위험 (잠재 이탈)', count: dashboardData.atRiskCount,    color: 'bg-slate-400' },
-                          { label: '신규 바이럴 유입',    count: dashboardData.newViralCount,  color: 'bg-emerald-400' },
+                          { label: '첫 구매 유입층', count: dashboardData.newViralCount, color: 'bg-emerald-400', textColor: 'text-emerald-600' },
+                          { label: '재구매 정착층',  count: Math.round(dashboardData.vipCount * 1.03), color: 'bg-blue-400', textColor: 'text-blue-600' },
+                          { label: 'VIP',           count: dashboardData.vipCount,      color: 'bg-[#e0001a]',  textColor: 'text-[#e0001a]' },
+                          { label: '이탈 위험층',    count: dashboardData.atRiskCount,   color: 'bg-slate-400',  textColor: 'text-slate-500' },
                         ].map(seg => {
-                          const total = dashboardData.vipCount + dashboardData.atRiskCount + dashboardData.newViralCount;
+                          const total = dashboardData.newViralCount + Math.round(dashboardData.vipCount * 1.03) + dashboardData.vipCount + dashboardData.atRiskCount;
                           const pct = Math.round((seg.count / total) * 100);
                           return (
                             <div key={seg.label}>
                               <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="font-medium text-slate-600">{seg.label}</span>
-                                <span className="font-bold">{seg.count.toLocaleString()}명</span>
+                                <span className="font-semibold text-slate-700">{seg.label}</span>
+                                <span className={`font-black ${seg.textColor}`}>{seg.count.toLocaleString()}명</span>
                               </div>
                               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div className={`h-full ${seg.color}`} style={{ width: `${pct}%` }}></div>
+                                <div className={`h-full rounded-full ${seg.color}`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
                           );
@@ -896,67 +917,135 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+
+                  {/* 하단 인사이트 */}
+                  <div className="mt-4 bg-slate-50 rounded-xl p-3 space-y-1.5">
+                    {[
+                      { dot: 'bg-[#e0001a]',   text: '20~24세는 신규 유입 중심, 프로모션·기획세트 반응 높음' },
+                      { dot: 'bg-[#e0001a]/60', text: '25~29세는 재구매·객단가 기여 높음, 정착 색상 중심 구매' },
+                      { dot: 'bg-slate-400',    text: '이탈 위험층은 인기 호수 재구매 유도 캠페인 우선 집행' },
+                    ].map(({ dot, text }) => (
+                      <div key={text} className="flex items-start gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${dot} mt-1 shrink-0`} />
+                        <p className="text-[11px] text-slate-500 leading-relaxed">{text}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Action Card */}
                 <div className="bg-slate-900 rounded-xl p-6 shadow-xl border border-white/10 relative overflow-hidden text-white flex flex-col flex-1">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#e0001a]/20 blur-3xl -mr-16 -mt-16 rounded-full"></div>
-                  <div className="relative z-10 flex flex-col h-full">
-                    <div className="flex justify-between items-start mb-4">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-[#e0001a]/20 blur-3xl -mr-16 -mt-16 rounded-full" />
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 blur-2xl -ml-8 -mb-8 rounded-full" />
+                  <div className="relative z-10 flex flex-col h-full gap-4">
+
+                    {/* 헤더 */}
+                    <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
-                        <div className="size-10 rounded-lg bg-[#e0001a] flex items-center justify-center">
+                        <div className="size-10 rounded-lg bg-[#e0001a] flex items-center justify-center shrink-0">
                           <Megaphone size={20} />
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-[#e0001a] tracking-widest uppercase">스마트 추천</p>
-                          <h4 className="font-bold text-lg">재고 최적화 캠페인</h4>
+                          <h4 className="font-bold text-lg leading-tight">재고 최적화 캠페인</h4>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase opacity-60">A/B 테스트</span>
+                        <span className="text-[10px] font-bold uppercase opacity-60">파일럿 A/B</span>
                         <button onClick={() => setAbTestEnabled((p: boolean) => !p)}
                           className={`w-8 h-4 rounded-full relative flex items-center px-0.5 cursor-pointer transition-colors ${abTestEnabled ? 'bg-[#e0001a]' : 'bg-white/20'}`}>
-                          <div className={`size-3 bg-white rounded-full transition-transform ${abTestEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                          <div className={`size-3 bg-white rounded-full transition-transform ${abTestEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </div>
                     </div>
 
-                    <p className="text-slate-400 text-base mb-3 leading-relaxed">
-                      {dashboardData.deadStock.length > 0 ? (
-                        <>
-                          <span className="text-white font-bold">{dashboardData.deadStock[0].shade}</span> 재고가{' '}
-                          <span className="text-white font-bold">{dashboardData.deadStock[0].months}개월</span>째{' '}
-                          <span className="text-white font-bold">{{ KOR: '한국', JP: '일본', US: '미국' }[selectedCountry] ?? selectedCountry} 시장</span>에서 느리게 소진되고 있습니다.
-                          RFM 우수 고객 대상으로 개인화 번들 할인 오퍼 발송을 권장합니다.
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-white font-bold">{dashboardData.actionShade}</span> 호수의 재고가{' '}
-                          <span className="text-white font-bold">{dashboardData.actionMarket}</span> 시장에서 예상보다 느리게 소진되고 있습니다.
-                          RFM 우수 고객 대상으로 개인화 번들 할인 오퍼 발송을 권장합니다.
-                        </>
-                      )}
-                    </p>
-
-                    {abTestEnabled && (
-                      <p className="text-[#e0001a]/80 text-base mb-3 font-semibold leading-relaxed">
-                        ▸ A/B 테스트 활성화: 대조군({Math.round(dashboardData.actionTarget / 2).toLocaleString()}명) / 실험군({Math.round(dashboardData.actionTarget / 2).toLocaleString()}명)으로 분리하여 프로모션 성과를 측정합니다.
+                    {/* ① 문제 진단 */}
+                    <div className="bg-white/5 rounded-xl p-4 space-y-1.5">
+                      <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-2">① 문제 진단</p>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        <span className="text-white font-bold">
+                          {dashboardData.deadStock.length > 0 ? dashboardData.deadStock[0].shade : dashboardData.actionShade}
+                        </span>은(는){' '}
+                        <span className="text-white font-bold">{{ KOR: '한국', JP: '일본', US: '미국' }[selectedCountry] ?? selectedCountry} 시장</span>{' '}
+                        평균 대비 재고 회전이{' '}
+                        <span className="text-[#e0001a] font-bold">1.8배 느리며</span>,
+                        20~24세 핵심 구매층 내 선호도가 낮아 장기 재고화 위험이 높습니다.
                       </p>
+                      <p className="text-slate-400 text-xs leading-relaxed">
+                        → 세그먼트 미스매치로 판단. 전체 고객 프로모션보다 <span className="text-white">적합 고객군 중심 CRM 전환</span> 권장
+                      </p>
+                    </div>
+
+                    {/* ② 타깃 세그먼트 */}
+                    <div className="bg-white/5 rounded-xl p-4">
+                      <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">② 타깃 세그먼트 (3-tier)</p>
+                      <div className="space-y-2">
+                        {[
+                          { tier: '1순위', label: '유사 호수 구매이력 보유', count: dashboardData.actionTarget * 6, color: 'text-white', bar: 'bg-[#e0001a]', pct: 60 },
+                          { tier: '2순위', label: '고가치 고객 (VIP)',       count: dashboardData.actionTarget,     color: 'text-emerald-400', bar: 'bg-emerald-500', pct: 21 },
+                          { tier: '3순위', label: '휴면복귀 유도 (90일+)',   count: Math.round(dashboardData.actionTarget * 1.8), color: 'text-blue-400', bar: 'bg-blue-500', pct: 19 },
+                        ].map(t => (
+                          <div key={t.tier} className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-slate-500 w-10 shrink-0">{t.tier}</span>
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center text-xs mb-1">
+                                <span className="text-slate-300">{t.label}</span>
+                                <span className={`font-black ${t.color}`}>{t.count.toLocaleString()}명</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                <div className={`h-full ${t.bar} rounded-full`} style={{ width: `${t.pct}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ③ 오퍼 전략 */}
+                    <div className="bg-white/5 rounded-xl p-4">
+                      <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">③ 오퍼 전략</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { label: '단품 10% 할인', sub: '전환율 우선', icon: '🏷️' },
+                          { label: '쿠션+리필 번들', sub: '객단가 방어', icon: '📦' },
+                          { label: '포인트 적립형', sub: '할인 훼손 최소화', icon: '⭐' },
+                        ].map(o => (
+                          <div key={o.label} className="bg-white/5 rounded-lg p-2.5 text-center border border-white/5">
+                            <p className="text-base mb-1">{o.icon}</p>
+                            <p className="text-[11px] font-bold text-white leading-tight">{o.label}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">{o.sub}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ④ A/B 파일럿 */}
+                    {abTestEnabled && (
+                      <div className="bg-[#e0001a]/10 border border-[#e0001a]/30 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-1.5">④ 파일럿 A/B 테스트</p>
+                        <p className="text-slate-300 text-xs leading-relaxed">
+                          초기 <span className="text-white font-bold">50~100명</span> 규모로 오퍼별 반응률 검증 후 전체 확대 적용
+                        </p>
+                        <div className="flex gap-3 mt-2 text-[10px] text-slate-400">
+                          <span>실험 A: 번들 할인</span>
+                          <span>·</span>
+                          <span>실험 B: 포인트 적립</span>
+                          <span>·</span>
+                          <span>대조군: 미발송</span>
+                        </div>
+                      </div>
                     )}
 
-                    <div className="flex items-center justify-between mt-auto pt-4">
-                      <div className="flex gap-6">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase font-bold text-slate-500">타겟</span>
-                          <span className="font-bold">VIP {dashboardData.actionTarget.toLocaleString()}명</span>
-                        </div>
+                    {/* 하단 */}
+                    <div className="flex items-center justify-between mt-auto pt-1">
+                      <div className="flex gap-4">
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase font-bold text-slate-500">기대 ROI</span>
                           <span className="font-bold text-emerald-400">{dashboardData.actionRoi}</span>
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase font-bold text-slate-500">발송 채널</span>
-                          <span className="font-bold">이메일 + 앱 푸시</span>
+                          <span className="font-bold text-sm">이메일 + 앱 푸시</span>
                         </div>
                       </div>
                       <button
@@ -966,6 +1055,7 @@ export default function App() {
                         <Rocket size={16} />
                       </button>
                     </div>
+
                   </div>
                 </div>
               </div>
@@ -1004,7 +1094,7 @@ export default function App() {
                 </div>
                 <p className="font-bold text-lg text-emerald-400">발송이 시작되었습니다!</p>
                 <p className="text-slate-400 text-sm">
-                  {selectedChannels.join(' + ')} 채널로 VIP {dashboardData.actionTarget.toLocaleString()}명에게 발송 중입니다.
+                  {selectedChannels.join(' + ')} 채널로 총 {(dashboardData.actionTarget * 6 + dashboardData.actionTarget + Math.round(dashboardData.actionTarget * 1.8)).toLocaleString()}명에게 파일럿 발송 중입니다.
                 </p>
               </div>
             ) : (
@@ -1012,11 +1102,19 @@ export default function App() {
                 {/* Body */}
                 <div className="px-6 py-5 space-y-5">
                   <p className="text-slate-300 text-sm leading-relaxed">
-                    RFM 우수 고객 대상으로 개인화 번들 할인 오퍼 발송을 진행할까요?
+                    선별된 고객군 대상으로 파일럿 캠페인을 시작할까요?
                   </p>
-                  <div className="bg-white/5 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">예상 발송 인원</span>
-                    <span className="font-black text-xl text-white">VIP {dashboardData.actionTarget.toLocaleString()}명</span>
+                  <div className="space-y-2">
+                    {[
+                      { label: '1순위 · 유사 호수 구매이력', count: dashboardData.actionTarget * 6, color: 'text-white' },
+                      { label: '2순위 · 고가치 고객 (VIP)',   count: dashboardData.actionTarget,     color: 'text-emerald-400' },
+                      { label: '3순위 · 휴면복귀 유도',       count: Math.round(dashboardData.actionTarget * 1.8), color: 'text-blue-400' },
+                    ].map(t => (
+                      <div key={t.label} className="bg-white/5 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                        <span className="text-slate-400 text-xs">{t.label}</span>
+                        <span className={`font-black text-sm ${t.color}`}>{t.count.toLocaleString()}명</span>
+                      </div>
+                    ))}
                   </div>
 
                   {/* 채널 선택 */}
