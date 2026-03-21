@@ -20,6 +20,7 @@ import {
 import {
   applyProductMod, snapIntensity,
   formatSalesK, formatLossKRW, dDayBadge,
+  MOCK_DATA,
 } from './mockData';
 import { useDashboardData } from './hooks/useDashboardData';
 
@@ -146,6 +147,7 @@ export default function App() {
   // ── Heatmap / chart state ────────────────────────────────────────────────────
   const [selectedShade, setSelectedShade] = useState<string>('21N');
   const [shadePopup,    setShadePopup]    = useState<{ name: string; color: string } | null>(null);
+  const [velocityView,  setVelocityView]  = useState<'채널별' | '국가별'>('채널별');
 
   // ── Action card state ────────────────────────────────────────────────────────
   const [abTestEnabled, setAbTestEnabled] = useState(true);
@@ -252,6 +254,27 @@ export default function App() {
     }));
   }, [dashboardData, selectedShade, computedIntensities]);
 
+  // ── 4b. 국가별 소진 속도 데이터 (KOR/JP/US 합산 velocity × shade 강도) ────────
+  const countryVelocityData = useMemo(() => {
+    const productData = MOCK_DATA[selectedProductId];
+    if (!productData) return [];
+    const dayKeys = (productData['KOR']?.velocity ?? []).map(v => v.day);
+    return dayKeys.map((day, i) => {
+      const pt: Record<string, string | number> = { day };
+      (['KOR', 'JP', 'US'] as const).forEach(c => {
+        const cData = productData[c];
+        if (!cData) { pt[c] = 0; return; }
+        const vel = cData.velocity[i];
+        if (!vel) { pt[c] = 0; return; }
+        const total = vel.amazon + vel.tiktok + vel.offline;
+        const sel = cData.shadeIntensity[selectedShade] ?? 20;
+        const max = Math.max(...Object.values(cData.shadeIntensity) as number[], 1);
+        pt[c] = Math.max(0, Math.round(total * sel / max));
+      });
+      return pt;
+    });
+  }, [selectedProductId, selectedShade]);
+
   // ── 5. Channel-specific burn rate multiplier ─────────────────────────────────
   const channelBurnMult = useMemo(() => {
     if (!dashboardData || selectedChannel === '전체') return 1;
@@ -287,15 +310,22 @@ export default function App() {
 
   // ── 6. Projected burn rate for the velocity chart footer ─────────────────────
   const projectedBurnRate = useMemo(() => {
+    if (velocityView === '국가별') {
+      // 국가별: KOR + JP + US 합산
+      const last = countryVelocityData[countryVelocityData.length - 1];
+      if (!last) return 0;
+      return ((last.KOR as number) || 0) + ((last.JP as number) || 0) + ((last.US as number) || 0);
+    }
+    // 채널별
     if (!dashboardData) return 0;
-    const last  = shadeVelocityData[shadeVelocityData.length - 1];
+    const last = shadeVelocityData[shadeVelocityData.length - 1];
     if (!last) return 0;
     const key = channelConfig.labelMap[selectedChannel];
     const sa = selectedChannel === '전체' || key === 'amazon';
     const st = selectedChannel === '전체' || key === 'tiktok';
     const so = selectedChannel === '전체' || key === 'offline';
     return (sa ? last.amazon : 0) + (st ? last.tiktok : 0) + (so ? last.offline : 0);
-  }, [dashboardData, shadeVelocityData, selectedChannel, channelConfig]);
+  }, [dashboardData, shadeVelocityData, countryVelocityData, selectedChannel, channelConfig, velocityView]);
 
   // ── 7. Heatmap popup channel-split values ───────────────────────────────────
   const popupChannelValues = useMemo(() => {
@@ -620,35 +650,107 @@ export default function App() {
                 <div className="flex justify-between items-center mb-1">
                   <h3 className="font-bold text-lg flex items-center gap-2">
                     <LineChartIcon className="text-[#e0001a]" size={20} />
-                    채널별 소진 속도: 호수 {selectedShade}
+                    {velocityView} 소진 속도: 호수 {selectedShade}
                   </h3>
+                  {/* 뷰 토글 */}
+                  <div className="flex gap-1">
+                    {(['채널별', '국가별'] as const).map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setVelocityView(v)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          velocityView === v
+                            ? 'bg-[#e0001a] text-white'
+                            : 'bg-[#e0001a]/5 text-slate-600 hover:bg-[#e0001a]/10'
+                        }`}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400 mb-4">
                   히트맵 또는 Top 3 카드 클릭 시 해당 호수 데이터로 변경됩니다
                 </p>
-                <div className="flex gap-4 mb-4">
-                  {showAmazon  && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#e0001a]"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.amazon}</span></div>}
-                  {hasTiktok && showTiktok  && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-800"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.tiktok}</span></div>}
-                  {showOffline && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.offline}</span></div>}
-                </div>
-                <div className="flex-1 relative min-h-[200px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={shadeVelocityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <XAxis dataKey="day" axisLine={false} tickLine={false}
-                        tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                      <Tooltip
-                        formatter={(value: number, name: string) => [value, channelConfig.dataLabel[name] ?? name]}
-                      />
-                      {showAmazon  && <Line type="monotone" dataKey="amazon"  stroke="#e0001a" strokeWidth={3} dot={false} />}
-                      {hasTiktok && showTiktok  && <Line type="monotone" dataKey="tiktok"  stroke="#1e293b" strokeWidth={2} strokeDasharray="4 4" dot={false} />}
-                      {showOffline && <Line type="monotone" dataKey="offline" stroke="#94a3b8" strokeWidth={2} dot={false} />}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+
+                {velocityView === '채널별' ? (
+                  <>
+                    <div className="flex gap-4 mb-4">
+                      {showAmazon  && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#e0001a]"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.amazon}</span></div>}
+                      {hasTiktok && showTiktok  && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-800"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.tiktok}</span></div>}
+                      {showOffline && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-[10px] font-bold text-slate-500">{channelConfig.dataLabel.offline}</span></div>}
+                    </div>
+                    <div className="flex-1 relative min-h-[200px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={shadeVelocityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <XAxis dataKey="day" axisLine={false} tickLine={false}
+                            tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                          <Tooltip formatter={(value: number, name: string) => [value, channelConfig.dataLabel[name] ?? name]} />
+                          {showAmazon  && <Line type="monotone" dataKey="amazon"  stroke="#e0001a" strokeWidth={3} dot={false} />}
+                          {hasTiktok && showTiktok && <Line type="monotone" dataKey="tiktok"  stroke="#1e293b" strokeWidth={2} strokeDasharray="4 4" dot={false} />}
+                          {showOffline && <Line type="monotone" dataKey="offline" stroke="#94a3b8" strokeWidth={2} dot={false} />}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex gap-4 mb-4">
+                      {([
+                        { label: '한국', key: 'KOR', color: '#84cc16' },
+                        { label: '일본', key: 'JP',  color: '#e0001a' },
+                        { label: '미국', key: 'US',  color: '#0ea5e9' },
+                      ] as const).map(({ label, key, color }) => (
+                        <div key={key} className="flex items-center gap-1.5">
+                          <div className="w-5 h-0.5 rounded-full" style={{ backgroundColor: color }} />
+                          <img src={COUNTRY_FLAG[key]} alt={key} className="w-4 h-3 object-cover rounded-sm" />
+                          <span className="text-[10px] font-bold text-slate-500">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex-1 relative min-h-[200px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={countryVelocityData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
+                          <XAxis dataKey="day" axisLine={false} tickLine={false}
+                            tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
+                            formatter={(value: number, name: string) => [
+                              `${value.toLocaleString()}개`,
+                              { KOR: '🇰🇷 한국', JP: '🇯🇵 일본', US: '🇺🇸 미국' }[name] ?? name,
+                            ]}
+                          />
+                          {([
+                            { key: 'KOR', color: '#84cc16', flag: COUNTRY_FLAG['KOR'] },
+                            { key: 'JP',  color: '#e0001a', flag: COUNTRY_FLAG['JP']  },
+                            { key: 'US',  color: '#0ea5e9', flag: COUNTRY_FLAG['US']  },
+                          ] as const).map(({ key, color, flag }) => (
+                            <Line key={key} type="monotone" dataKey={key}
+                              stroke={color} strokeWidth={2.5} dot={false}
+                              activeDot={{ r: 5, fill: color, strokeWidth: 0 }}
+                              label={(props: any) => {
+                                if (props.index !== countryVelocityData.length - 1) return <g />;
+                                return (
+                                  <image key={`flag-${key}`}
+                                    href={flag} x={props.x + 4} y={props.y - 7}
+                                    width={18} height={13} preserveAspectRatio="xMidYMid meet"
+                                    style={{ borderRadius: 2 }}
+                                  />
+                                );
+                              }}
+                            />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+
                 <div className="mt-4 p-3 bg-slate-50 rounded-lg flex justify-between items-center">
                   <span className="text-xs font-semibold">
-                    일일 소진 속도 (예측) · {selectedShade} · {selectedChannel === '전체' ? '전 채널' : selectedChannel}
+                    일일 소진 속도 (예측) · {selectedShade} · {velocityView === '국가별' ? '전 국가' : selectedChannel === '전체' ? '전 채널' : selectedChannel}
                   </span>
                   <span className="text-xs font-black text-[#e0001a]">
                     {projectedBurnRate.toLocaleString()} 개 / 일
