@@ -829,23 +829,50 @@ export default function App() {
 
                 {/* Dead Stock */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-orange-100">
-                  <h3 className="font-bold text-base mb-4 flex items-center gap-2 text-orange-600">
-                    <Package size={18} />
-                    악성 재고 (Dead Stock) 경고
-                  </h3>
+                  <div className="flex items-start justify-between mb-1">
+                    <h3 className="font-bold text-base flex items-center gap-2 text-orange-600">
+                      <Package size={18} />
+                      장기 체류 재고 경고
+                    </h3>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-4">
+                    기준: 재고일수 90일 초과 또는 최근 30일 평균 판매 기준 미달
+                  </p>
                   <div className="space-y-3">
-                    {dashboardData.deadStock.map(item => (
-                      <div key={item.shade} className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{item.shade}</p>
-                          <p className="text-xs text-slate-400">재고 정체 {item.months}개월</p>
+                    {dashboardData.deadStock.map((item, idx) => {
+                      const stockDays = Math.round(item.months * 30);
+                      const actions = [
+                        { label: '미국향 번들 전환',   color: 'bg-blue-50 text-blue-600 border-blue-200' },
+                        { label: '타 국가 이관 검토',  color: 'bg-purple-50 text-purple-600 border-purple-200' },
+                        { label: 'CRM 소진 캠페인',   color: 'bg-orange-50 text-orange-600 border-orange-200' },
+                      ];
+                      const action = actions[idx % actions.length];
+                      return (
+                        <div key={item.shade} className="rounded-xl border border-orange-100 p-3 space-y-2">
+                          {/* 상단: SKU + 재고일수 */}
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{item.shade}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                재고일수 <span className="font-bold text-orange-600">{stockDays}일</span>
+                                {' · '}최근 90일 저회전
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0 ml-3">
+                              <p className="text-sm font-black text-orange-600">{formatLossKRW(item.lossKRW)}</p>
+                              <p className="text-[10px] text-slate-400">묶임 재고금액</p>
+                            </div>
+                          </div>
+                          {/* 권장 액션 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 shrink-0">권장 액션</span>
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${action.color}`}>
+                              {action.label}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-orange-600">{formatLossKRW(item.lossKRW)}</p>
-                          <p className="text-[10px] text-slate-400">보관 손실 추정</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -934,7 +961,7 @@ export default function App() {
                 </div>
 
                 {/* Action Card */}
-                <div className="bg-slate-900 rounded-xl p-6 shadow-xl border border-white/10 relative overflow-hidden text-white flex flex-col flex-1">
+                <div className="bg-slate-900 rounded-xl p-6 shadow-xl border border-white/10 relative overflow-hidden text-white flex flex-col flex-1 min-h-0">
                   <div className="absolute top-0 right-0 w-40 h-40 bg-[#e0001a]/20 blur-3xl -mr-16 -mt-16 rounded-full" />
                   <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 blur-2xl -ml-8 -mb-8 rounded-full" />
                   <div className="relative z-10 flex flex-col h-full gap-4">
@@ -1001,40 +1028,55 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* ③ 오퍼 전략 */}
-                    <div className="bg-white/5 rounded-xl p-4">
-                      <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">③ 오퍼 전략</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { label: '단품 10% 할인', sub: '전환율 우선', icon: '🏷️' },
-                          { label: '쿠션+리필 번들', sub: '객단가 방어', icon: '📦' },
-                          { label: '포인트 적립형', sub: '할인 훼손 최소화', icon: '⭐' },
-                        ].map(o => (
-                          <div key={o.label} className="bg-white/5 rounded-lg p-2.5 text-center border border-white/5">
-                            <p className="text-base mb-1">{o.icon}</p>
-                            <p className="text-[11px] font-bold text-white leading-tight">{o.label}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{o.sub}</p>
+                    {/* ③ 오퍼 전략 + ④ A/B 파일럿 (같은 높이 유지) */}
+                    <div className="flex flex-col gap-2">
+                      {abTestEnabled ? (
+                        /* ③ 컴팩트 — A/B 켜짐 시 한 줄로 압축 */
+                        <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
+                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest shrink-0">③ 오퍼</p>
+                          <div className="flex gap-1.5 flex-1 flex-wrap">
+                            {['🏷️ 단품 10%', '📦 번들', '⭐ 포인트'].map(o => (
+                              <span key={o} className="bg-white/10 rounded px-2 py-0.5 text-[10px] text-slate-300 font-medium">{o}</span>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ④ A/B 파일럿 */}
-                    {abTestEnabled && (
-                      <div className="bg-[#e0001a]/10 border border-[#e0001a]/30 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-1.5">④ 파일럿 A/B 테스트</p>
-                        <p className="text-slate-300 text-xs leading-relaxed">
-                          초기 <span className="text-white font-bold">50~100명</span> 규모로 오퍼별 반응률 검증 후 전체 확대 적용
-                        </p>
-                        <div className="flex gap-3 mt-2 text-[10px] text-slate-400">
-                          <span>실험 A: 번들 할인</span>
-                          <span>·</span>
-                          <span>실험 B: 포인트 적립</span>
-                          <span>·</span>
-                          <span>대조군: 미발송</span>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        /* ③ 풀 — A/B 꺼짐 시 전체 카드 */
+                        <div className="bg-white/5 rounded-xl p-4">
+                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">③ 오퍼 전략</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: '단품 10% 할인', sub: '전환율 우선', icon: '🏷️' },
+                              { label: '쿠션+리필 번들', sub: '객단가 방어', icon: '📦' },
+                              { label: '포인트 적립형', sub: '할인 훼손 최소화', icon: '⭐' },
+                            ].map(o => (
+                              <div key={o.label} className="bg-white/5 rounded-lg p-2.5 text-center border border-white/5">
+                                <p className="text-base mb-1">{o.icon}</p>
+                                <p className="text-[11px] font-bold text-white leading-tight">{o.label}</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{o.sub}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ④ A/B 파일럿 */}
+                      {abTestEnabled && (
+                        <div className="bg-[#e0001a]/10 border border-[#e0001a]/30 rounded-xl p-3">
+                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-1.5">④ 파일럿 A/B 테스트</p>
+                          <p className="text-slate-300 text-xs leading-relaxed">
+                            초기 <span className="text-white font-bold">50~100명</span> 규모로 오퍼별 반응률 검증 후 전체 확대 적용
+                          </p>
+                          <div className="flex gap-3 mt-2 text-[10px] text-slate-400">
+                            <span>실험 A: 번들 할인</span>
+                            <span>·</span>
+                            <span>실험 B: 포인트 적립</span>
+                            <span>·</span>
+                            <span>대조군: 미발송</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* 하단 */}
                     <div className="flex items-center justify-between mt-auto pt-1">
