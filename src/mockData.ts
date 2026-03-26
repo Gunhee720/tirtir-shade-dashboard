@@ -331,7 +331,7 @@ export const MOCK_DATA: Record<string, Record<string, CountryMetrics>> = {
   // ─── 마스크핏 크리스탈 메쉬 쿠션 ───────────────────────────────────────────
   crystal: {
     KOR: {
-      totalSalesK: 240, momGrowth: 10, momTarget: 12,
+      totalSalesK: 240, momGrowth: 16, momTarget: 12,
       velocity: [
         { day: 'DAY 01', amazon: 8,  tiktok: 18, offline: 32 },
         { day: 'DAY 07', amazon: 12, tiktok: 25, offline: 30 },

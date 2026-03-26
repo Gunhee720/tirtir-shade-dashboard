@@ -533,7 +533,7 @@ export default function App() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg flex items-center gap-2">
                     <LayoutGrid className="text-[#e0001a]" size={20} />
-                    45 쉐이드 히트맵 (판매 강도)
+                    45 쉐이드 히트맵 (인기도)
                   </h3>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
                     <span>낮음</span>
@@ -605,7 +605,7 @@ export default function App() {
                       <div>
                         <p className="font-black text-base text-slate-900">호수 {shadePopup.name}</p>
                         <p className="text-xs text-slate-500">
-                          판매 강도: {(() => {
+                          인기도: {(() => {
                             const v = computedIntensities[shadePopup.name] ?? 5;
                             return v===5?'낮음':v===20?'보통':v===40?'양호':v===70?'높음':'최고';
                           })()}
@@ -749,7 +749,7 @@ export default function App() {
             {/* ── Bottom ── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left: Inventory + Dead Stock */}
-              <div className="lg:col-span-5 space-y-4">
+              <div className="lg:col-span-5 flex flex-col gap-4">
                 {/* OOS Alert */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-[#e0001a]/5">
                   <div className="flex items-center justify-between mb-1">
@@ -765,7 +765,7 @@ export default function App() {
                     상시 판매와 프로모션 판매를 분리해 실제 품절 리스크와 추가 확보 필요량을 구분합니다
                   </p>
                   <div className="space-y-3">
-                    {dashboardData.inventory.map(item => {
+                    {dashboardData.inventory.slice(0, 3).map(item => {
                       const effStock    = Math.max(1, Math.round(item.stock    * inventoryMult));
                       const effBurnRate = Math.max(1, Math.round(item.burnRate * inventoryMult));
 
@@ -828,47 +828,33 @@ export default function App() {
                 </div>
 
                 {/* Dead Stock */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-orange-100">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-orange-100 flex-1">
                   <div className="flex items-start justify-between mb-1">
                     <h3 className="font-bold text-base flex items-center gap-2 text-orange-600">
                       <Package size={18} />
-                      장기 체류 재고 경고
+                      악성 재고 경고
                     </h3>
                   </div>
                   <p className="text-[10px] text-slate-400 mb-4">
-                    기준: 재고일수 90일 초과 또는 최근 30일 평균 판매 기준 미달
+                    기준: 최근 30일 평균 판매 기준 미달
                   </p>
                   <div className="space-y-3">
-                    {dashboardData.deadStock.map((item, idx) => {
+                    {dashboardData.deadStock.map((item) => {
                       const stockDays = Math.round(item.months * 30);
-                      const actions = [
-                        { label: '미국향 번들 전환',   color: 'bg-blue-50 text-blue-600 border-blue-200' },
-                        { label: '타 국가 이관 검토',  color: 'bg-purple-50 text-purple-600 border-purple-200' },
-                        { label: 'CRM 소진 캠페인',   color: 'bg-orange-50 text-orange-600 border-orange-200' },
-                      ];
-                      const action = actions[idx % actions.length];
                       return (
-                        <div key={item.shade} className="rounded-xl border border-orange-100 p-3 space-y-2">
-                          {/* 상단: SKU + 재고일수 */}
+                        <div key={item.shade} className="rounded-xl border border-orange-100 p-3">
                           <div className="flex items-start justify-between">
                             <div>
                               <p className="text-sm font-bold text-slate-800">{item.shade}</p>
                               <p className="text-xs text-slate-500 mt-0.5">
                                 재고일수 <span className="font-bold text-orange-600">{stockDays}일</span>
-                                {' · '}최근 90일 저회전
+                                {' · '}최근 30일 판매 기준 미달
                               </p>
                             </div>
                             <div className="text-right shrink-0 ml-3">
                               <p className="text-sm font-black text-orange-600">{formatLossKRW(item.lossKRW)}</p>
                               <p className="text-[10px] text-slate-400">묶임 재고금액</p>
                             </div>
-                          </div>
-                          {/* 권장 액션 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 shrink-0">권장 액션</span>
-                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${action.color}`}>
-                              {action.label}
-                            </span>
                           </div>
                         </div>
                       );
@@ -900,14 +886,11 @@ export default function App() {
                           { label: '20~24세 여성', pct: 52, color: 'bg-[#e0001a]',   desc: '신규 유입 중심' },
                           { label: '25~29세 여성', pct: 31, color: 'bg-[#e0001a]/60', desc: '재구매·객단가 기여' },
                           { label: '기타',         pct: 17, color: 'bg-slate-200',    desc: '' },
-                        ].map(({ label, pct, color, desc }) => (
+                        ].map(({ label, pct, color }) => (
                           <div key={label}>
                             <div className="flex justify-between items-center text-xs mb-1">
                               <span className="font-semibold text-slate-700">{label}</span>
-                              <div className="flex items-center gap-2">
-                                {desc && <span className="text-[10px] text-slate-400">{desc}</span>}
-                                <span className="font-black text-slate-900">{pct}%</span>
-                              </div>
+                              <span className="font-black text-slate-900">{pct}%</span>
                             </div>
                             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                               <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
@@ -922,12 +905,11 @@ export default function App() {
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">CRM 타깃 세그먼트</p>
                       <div className="space-y-2.5">
                         {[
-                          { label: '첫 구매 유입층', count: dashboardData.newViralCount, color: 'bg-emerald-400', textColor: 'text-emerald-600' },
-                          { label: '재구매 정착층',  count: Math.round(dashboardData.vipCount * 1.03), color: 'bg-blue-400', textColor: 'text-blue-600' },
-                          { label: 'VIP',           count: dashboardData.vipCount,      color: 'bg-[#e0001a]',  textColor: 'text-[#e0001a]' },
-                          { label: '이탈 위험층',    count: dashboardData.atRiskCount,   color: 'bg-slate-400',  textColor: 'text-slate-500' },
+                          { label: '신규 바이럴 유입객', count: dashboardData.newViralCount, color: 'bg-emerald-400', textColor: 'text-emerald-600' },
+                          { label: 'VIP',               count: dashboardData.vipCount,      color: 'bg-[#e0001a]',  textColor: 'text-[#e0001a]' },
+                          { label: '잠재 이탈 고객',     count: dashboardData.atRiskCount,   color: 'bg-slate-400',  textColor: 'text-slate-500' },
                         ].map(seg => {
-                          const total = dashboardData.newViralCount + Math.round(dashboardData.vipCount * 1.03) + dashboardData.vipCount + dashboardData.atRiskCount;
+                          const total = dashboardData.newViralCount + dashboardData.vipCount + dashboardData.atRiskCount;
                           const pct = Math.round((seg.count / total) * 100);
                           return (
                             <div key={seg.label}>
@@ -945,19 +927,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 하단 인사이트 */}
-                  <div className="mt-4 bg-slate-50 rounded-xl p-3 space-y-1.5">
-                    {[
-                      { dot: 'bg-[#e0001a]',   text: '20~24세는 신규 유입 중심, 프로모션·기획세트 반응 높음' },
-                      { dot: 'bg-[#e0001a]/60', text: '25~29세는 재구매·객단가 기여 높음, 정착 색상 중심 구매' },
-                      { dot: 'bg-slate-400',    text: '이탈 위험층은 인기 호수 재구매 유도 캠페인 우선 집행' },
-                    ].map(({ dot, text }) => (
-                      <div key={text} className="flex items-start gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${dot} mt-1 shrink-0`} />
-                        <p className="text-[11px] text-slate-500 leading-relaxed">{text}</p>
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Action Card */}
@@ -1003,76 +972,40 @@ export default function App() {
                       </p>
                     </div>
 
-                    {/* ② 타깃 세그먼트 */}
-                    <div className="bg-white/5 rounded-xl p-4">
-                      <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">② 타깃 세그먼트 (3-tier)</p>
-                      <div className="space-y-2">
-                        {[
-                          { tier: '1순위', label: '유사 호수 구매이력 보유', count: dashboardData.actionTarget * 6, color: 'text-white', bar: 'bg-[#e0001a]', pct: 60 },
-                          { tier: '2순위', label: '고가치 고객 (VIP)',       count: dashboardData.actionTarget,     color: 'text-emerald-400', bar: 'bg-emerald-500', pct: 21 },
-                          { tier: '3순위', label: '휴면복귀 유도 (90일+)',   count: Math.round(dashboardData.actionTarget * 1.8), color: 'text-blue-400', bar: 'bg-blue-500', pct: 19 },
-                        ].map(t => (
-                          <div key={t.tier} className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-slate-500 w-10 shrink-0">{t.tier}</span>
-                            <div className="flex-1">
-                              <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="text-slate-300">{t.label}</span>
-                                <span className={`font-black ${t.color}`}>{t.count.toLocaleString()}명</span>
-                              </div>
-                              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <div className={`h-full ${t.bar} rounded-full`} style={{ width: `${t.pct}%` }} />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ③ 오퍼 전략 + ④ A/B 파일럿 (같은 높이 유지) */}
+                    {/* ② 오퍼 전략 + ③ A/B 테스트 */}
                     <div className="flex flex-col gap-2">
-                      {abTestEnabled ? (
-                        /* ③ 컴팩트 — A/B 켜짐 시 한 줄로 압축 */
-                        <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
-                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest shrink-0">③ 오퍼</p>
-                          <div className="flex gap-1.5 flex-1 flex-wrap">
-                            {['🏷️ 단품 10%', '📦 번들', '⭐ 포인트'].map(o => (
-                              <span key={o} className="bg-white/10 rounded px-2 py-0.5 text-[10px] text-slate-300 font-medium">{o}</span>
-                            ))}
-                          </div>
+                      <div className="bg-white/5 rounded-xl p-5">
+                        <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-4">② 오퍼 전략</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { label: '단품 10% 쿠폰', sub: '전환율 우선', icon: '🏷️' },
+                            { label: '포인트 적립형', sub: '할인 훼손 최소화', icon: '⭐' },
+                          ].map(o => (
+                            <div key={o.label} className="bg-white/5 rounded-lg p-4 text-center border border-white/5">
+                              <p className="text-2xl mb-2">{o.icon}</p>
+                              <p className="text-sm font-bold text-white leading-tight">{o.label}</p>
+                              <p className="text-[11px] text-slate-400 mt-1">{o.sub}</p>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        /* ③ 풀 — A/B 꺼짐 시 전체 카드 */
-                        <div className="bg-white/5 rounded-xl p-4">
-                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-3">③ 오퍼 전략</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[
-                              { label: '단품 10% 할인', sub: '전환율 우선', icon: '🏷️' },
-                              { label: '쿠션+리필 번들', sub: '객단가 방어', icon: '📦' },
-                              { label: '포인트 적립형', sub: '할인 훼손 최소화', icon: '⭐' },
-                            ].map(o => (
-                              <div key={o.label} className="bg-white/5 rounded-lg p-2.5 text-center border border-white/5">
-                                <p className="text-base mb-1">{o.icon}</p>
-                                <p className="text-[11px] font-bold text-white leading-tight">{o.label}</p>
-                                <p className="text-[10px] text-slate-500 mt-0.5">{o.sub}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      </div>
 
-                      {/* ④ A/B 파일럿 */}
                       {abTestEnabled && (
                         <div className="bg-[#e0001a]/10 border border-[#e0001a]/30 rounded-xl p-3">
-                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-1.5">④ 파일럿 A/B 테스트</p>
+                          <p className="text-[10px] font-bold text-[#e0001a] uppercase tracking-widest mb-1.5">③ A/B 테스트</p>
                           <p className="text-slate-300 text-xs leading-relaxed">
                             초기 <span className="text-white font-bold">50~100명</span> 규모로 오퍼별 반응률 검증 후 전체 확대 적용
                           </p>
                           <div className="flex gap-3 mt-2 text-[10px] text-slate-400">
-                            <span>실험 A: 번들 할인</span>
+                            <span>실험 A: 단품 10% 쿠폰</span>
                             <span>·</span>
                             <span>실험 B: 포인트 적립</span>
                             <span>·</span>
                             <span>대조군: 미발송</span>
+                          </div>
+                          <div className="flex items-start gap-1.5 mt-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-2.5 py-2">
+                            <span className="text-yellow-400 text-[11px] shrink-0">⚠️</span>
+                            <p className="text-[10px] text-yellow-300/80 leading-snug">현재 표본(50~100명)이 통계적 유의 기준 미달 — 결과 해석 시 왜곡이 발생할 수 있습니다</p>
                           </div>
                         </div>
                       )}
