@@ -836,7 +836,7 @@ export default function App() {
                     </h3>
                   </div>
                   <p className="text-[10px] text-slate-400 mb-4">
-                    기준: 최근 30일 평균 판매 기준 미달
+                    기준: 최근 60일 평균 판매 기준 미달
                   </p>
                   <div className="space-y-3">
                     {dashboardData.deadStock.map((item) => {
@@ -848,7 +848,7 @@ export default function App() {
                               <p className="text-sm font-bold text-slate-800">{item.shade}</p>
                               <p className="text-xs text-slate-500 mt-0.5">
                                 재고일수 <span className="font-bold text-orange-600">{stockDays}일</span>
-                                {' · '}최근 30일 판매 기준 미달
+                                {' · '}최근 60일 판매 기준 미달
                               </p>
                             </div>
                             <div className="text-right shrink-0 ml-3">
